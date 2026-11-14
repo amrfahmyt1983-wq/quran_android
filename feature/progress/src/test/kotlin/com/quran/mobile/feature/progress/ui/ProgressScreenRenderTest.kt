@@ -66,6 +66,11 @@ class ProgressScreenRenderTest {
   }
 
   @Test
+  fun `a bookmark not placed yet`() {
+    eachLook("bookmark_unplaced", ProgressSelection(ProgressSection.BOOKMARKS, bookmark = ReadingBookmarkType.GREEN))
+  }
+
+  @Test
   fun `the memorizing`() {
     eachLook("memorizing", ProgressSelection(ProgressSection.MEMORIZING))
   }

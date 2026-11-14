@@ -175,20 +175,26 @@ internal fun BookmarkDetail(
       }
       Label(purposeName(bookmark.purpose))
       Spacer(Modifier.weight(1f))
-      if (!bookmark.hasHistory && bookmark.placed) Label(stringResource(R.string.progress_sample), quiet = true)
+      if (!bookmark.hasHistory) Label(stringResource(R.string.progress_sample), quiet = true)
     }
-    Text(
-      sentence(bookmark),
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      modifier = Modifier.padding(top = 6.dp, bottom = 18.dp),
-    )
+    val sentence = sentence(bookmark)
+    if (sentence.isNotEmpty()) {
+      Text(
+        sentence,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 6.dp, bottom = 18.dp),
+      )
+    }
     if (!bookmark.placed) {
       Text(
         stringResource(R.string.progress_not_placed_detail),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(top = 12.dp, bottom = 18.dp),
       )
+      // what its days will look like, until it is placed
+      DaysPanel(bookmark, color, panel, uncreditedTodayMinutes, dark)
       return@Column
     }
 
@@ -220,50 +226,7 @@ internal fun BookmarkDetail(
       }
     }
 
-    Panel(panel) {
-      val goal = bookmark.goal
-      Caption(
-        stringResource(R.string.progress_days_title),
-        listOfNotNull(
-          stringResource(R.string.progress_pages_per_day),
-          goal?.let { stringResource(R.string.progress_goal, it) },
-        ).joinToString(stringResource(R.string.progress_separator)),
-      )
-      val columns = if (bookmark.hasHistory) bookmark.days else SampleProgress.reading(bookmark.days)
-      DayBars(
-        columns = columns,
-        aboveColor = color,
-        belowColor = MaterialTheme.colorScheme.primary,
-        aboveLine = goal,
-        belowLine = if (bookmark.hasHistory) bookmark.averageMinutes else null,
-        describe = { column -> dayDescription(context, column) },
-        panel = panel,
-        faded = !bookmark.hasHistory,
-        dark = dark,
-      )
-      Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text(
-          listOfNotNull(
-            stringResource(R.string.progress_minutes_per_day),
-            bookmark.averageMinutes?.takeIf { bookmark.hasHistory }?.let { stringResource(R.string.progress_average, it) },
-          ).joinToString(stringResource(R.string.progress_separator)),
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.weight(1f),
-        )
-        bookmark.todayMinutes?.takeIf { bookmark.hasHistory }?.let {
-          Text(
-            stringResource(R.string.progress_today_value, it),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        }
-      }
-      if (!bookmark.hasHistory) Note(stringResource(R.string.progress_no_history))
-      if (uncreditedTodayMinutes > 0) {
-        Note(pluralStringResource(R.plurals.progress_uncredited, uncreditedTodayMinutes, uncreditedTodayMinutes))
-      }
-    }
+    DaysPanel(bookmark, color, panel, uncreditedTodayMinutes, dark)
 
     Facts(bookmark, reminder, panel, onAllowNotifications, onReminderTime)
 
@@ -271,6 +234,56 @@ internal fun BookmarkDetail(
       TextButton(onClick = onStartCycle, modifier = Modifier.padding(top = 4.dp)) {
         Text(stringResource(R.string.progress_start_cycle))
       }
+    }
+  }
+}
+
+/** Pages (above) and minutes (below) per day; sample days, faded, until the bookmark has moved. */
+@Composable
+private fun DaysPanel(bookmark: BookmarkView, color: Color, panel: Color, uncreditedTodayMinutes: Int, dark: Boolean) {
+  val context = context()
+  Panel(panel) {
+    val goal = bookmark.goal
+    Caption(
+      stringResource(R.string.progress_days_title),
+      listOfNotNull(
+        stringResource(R.string.progress_pages_per_day),
+        goal?.let { stringResource(R.string.progress_goal, it) },
+      ).joinToString(stringResource(R.string.progress_separator)),
+    )
+    val columns = if (bookmark.hasHistory) bookmark.days else SampleProgress.reading(bookmark.days)
+    DayBars(
+      columns = columns,
+      aboveColor = color,
+      belowColor = MaterialTheme.colorScheme.primary,
+      aboveLine = goal,
+      belowLine = if (bookmark.hasHistory) bookmark.averageMinutes else null,
+      describe = { column -> dayDescription(context, column) },
+      panel = panel,
+      faded = !bookmark.hasHistory,
+      dark = dark,
+    )
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+      Text(
+        listOfNotNull(
+          stringResource(R.string.progress_minutes_per_day),
+          bookmark.averageMinutes?.takeIf { bookmark.hasHistory }?.let { stringResource(R.string.progress_average, it) },
+        ).joinToString(stringResource(R.string.progress_separator)),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.weight(1f),
+      )
+      bookmark.todayMinutes?.takeIf { bookmark.hasHistory }?.let {
+        Text(
+          stringResource(R.string.progress_today_value, it),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+    }
+    if (!bookmark.hasHistory) Note(stringResource(R.string.progress_no_history))
+    if (uncreditedTodayMinutes > 0) {
+      Note(pluralStringResource(R.plurals.progress_uncredited, uncreditedTodayMinutes, uncreditedTodayMinutes))
     }
   }
 }

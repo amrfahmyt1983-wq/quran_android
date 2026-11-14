@@ -82,6 +82,9 @@ class RecitationTracker(
   // is there (not back at the first ayah on screen)
   private var home = startIndex
   private var sinceStart = if (startWindow <= 1) CONFIRMED_START_WORDS else 0
+  // where a start was dropped that way: a word heard clearly right there takes it up again (the start
+  // was right, a word was misheard), while a new start elsewhere needs a run of words again
+  private var dropped: Int? = null
   // the start was alike elsewhere and is being waited out
   private var waitedForStart = false
 
@@ -175,6 +178,7 @@ class RecitationTracker(
     if (!anchored) cursor = home
     anchored = true
     sinceStart = CONFIRMED_START_WORDS
+    dropped = null
     cursor = minOf(words.size, cursor + count)
     // what was heard stays evidence (the user may have gone on)
     setAside()
@@ -649,6 +653,7 @@ class RecitationTracker(
       trace?.invoke("start at $cursor not confirmed after $sinceStart words: searching again, expected there")
       anchored = false
       home = cursor
+      dropped = cursor
       mistakeAt = null
       return findStart()
     }
@@ -703,6 +708,35 @@ class RecitationTracker(
       return complete && s.lastPending >= 0 && s.cost <= config.allowance(words[w].length) &&
         s.matched >= 0.6 * words[w].length
     }
+    // the start dropped after a misheard word, and the user heard going on from it: it was right, twice
+    // over, and is no longer doubted. The words before the one heard clearly were said (misheard, as the
+    // one that dropped the start), unless nothing was heard there; it goes on after it
+    val at = dropped
+    val resumed = at?.let {
+      (at..minOf(at + RESUME_WORDS, words.size - 1)).firstOrNull { confident(it) && words[it].length >= RESUME_PHONEMES }
+    }
+    if (at != null && resumed != null) {
+      trace?.invoke("start at $at taken up again: ${words[resumed]} heard clearly at $resumed")
+      anchored = true
+      sinceStart = CONFIRMED_START_WORDS
+      dropped = null
+      waitedForStart = false
+      mistakeAt = null
+      val clear = firstWords.getValue(resumed)
+      val events = ArrayList<TrackerEvent>()
+      for (x in at until resumed) {
+        val s = firstWords[x]
+        events += if (s != null && s.lastPending >= 0) {
+          WordRecited(x, timeOf(s.lastPending), s.cost, fromContext = true, startMs = s.firstPending.takeIf { it >= 0 }?.let(::timeOf))
+        } else {
+          WordMissed(x, timeOf(clear.firstPending))
+        }
+      }
+      events += WordRecited(resumed, timeOf(clear.lastPending), clear.cost, startMs = timeOf(clear.firstPending))
+      consumePending(clear.lastPending)
+      cursor = resumed + 1
+      return if (pending.isEmpty()) events else events + update()
+    }
     // enough to tell the place: a few words in a row, and more of them if they are short ones (the
     // window is large)
     val start = firstWords.keys.filter { it < windowEnd }.firstOrNull { j ->
@@ -742,6 +776,7 @@ class RecitationTracker(
       anchored = true
       sinceStart = 0
       cursor = start
+      dropped = null
       mistakeAt = null
       if (!waitedForStart) return update()
       // after waiting, more words may have been heard than a normal update looks ahead: they count
@@ -1052,6 +1087,9 @@ class RecitationTracker(
     const val START_PHONEMES = 10
     /** Words recited from the start found after which it is no longer doubted. */
     const val CONFIRMED_START_WORDS = 6
+    /** A start dropped after a misheard word is taken up again on one clear word there or right after, this long. */
+    const val RESUME_WORDS = 1
+    const val RESUME_PHONEMES = 4
     /** Phonemes kept as evidence beyond pending. */
     const val OVERFLOW_MAX = 280
     /** Phonemes left in the pending buffer when a start alike elsewhere is chosen anyway (the nearest). */
